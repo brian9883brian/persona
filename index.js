@@ -18,15 +18,13 @@ const dbConfig = {
   password: process.env.DB_PASSWORD,
   database: process.env.DB_NAME,
   port: parseInt(process.env.DB_PORT),
-  ssl: { rejectUnauthorized: false } // Puedes eliminar esta línea si da error
+  ssl: { rejectUnauthorized: false } // Quita esta línea si da error
 };
 
 // Función para obtener conexión a la base de datos
 async function getConnection() {
   return await mysql.createConnection(dbConfig);
 }
-
-// Rutas CRUD
 
 // Obtener todas las personas
 app.get('/personas', async (req, res) => {
@@ -56,14 +54,25 @@ app.get('/personas/:id', async (req, res) => {
   }
 });
 
-// Crear nueva persona
+// Crear nueva persona con validación de direccion
 app.post('/personas', async (req, res) => {
   try {
     const { nombre, apellido_paterno, apellido_materno, fecha_nacimiento, IDdireccion } = req.body;
     if (!nombre || !apellido_paterno || !apellido_materno || !fecha_nacimiento) {
       return res.status(400).json({ message: 'Faltan datos obligatorios' });
     }
+
     const conn = await getConnection();
+
+    // Validar que IDdireccion exista (si fue enviado)
+    if (IDdireccion) {
+      const [direcciones] = await conn.query('SELECT * FROM direccion WHERE id = ?', [IDdireccion]);
+      if (direcciones.length === 0) {
+        await conn.end();
+        return res.status(400).json({ message: 'IDdireccion no existe' });
+      }
+    }
+
     const [result] = await conn.query(
       'INSERT INTO persona (nombre, apellido_paterno, apellido_materno, fecha_nacimiento, IDdireccion) VALUES (?, ?, ?, ?, ?)',
       [nombre, apellido_paterno, apellido_materno, fecha_nacimiento, IDdireccion || null]
@@ -75,7 +84,7 @@ app.post('/personas', async (req, res) => {
   }
 });
 
-// Actualizar persona por ID
+// Actualizar persona por ID con validación de direccion
 app.put('/personas/:id', async (req, res) => {
   try {
     const { id } = req.params;
@@ -87,6 +96,15 @@ app.put('/personas/:id', async (req, res) => {
     if (rows.length === 0) {
       await conn.end();
       return res.status(404).json({ message: 'Persona no encontrada' });
+    }
+
+    // Validar IDdireccion si fue enviado
+    if (IDdireccion) {
+      const [direcciones] = await conn.query('SELECT * FROM direccion WHERE id = ?', [IDdireccion]);
+      if (direcciones.length === 0) {
+        await conn.end();
+        return res.status(400).json({ message: 'IDdireccion no existe' });
+      }
     }
 
     const persona = rows[0];
